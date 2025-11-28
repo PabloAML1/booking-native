@@ -4,7 +4,7 @@ import FeaturedDestination from "../../components/FeaturedDestination";
 
 export default function Home() {
   return (
-    <View className="flex-1 bg-white pt-20">
+    <View className="flex-1 bg-white">
       <ScrollView 
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 20 }}

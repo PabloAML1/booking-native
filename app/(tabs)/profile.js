@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function Profile() {
   const { user } = useUser();
@@ -27,10 +28,14 @@ export default function Profile() {
     ]);
   };
 
+  const handleNotifications = () => {
+    router.push("/notifications");
+  };
+
   return (
-    <View className="flex-1 bg-white pt-20">
-      <ScrollView className="flex-1 px-6 py-6">
-        <Text className="text-3xl font-bold mb-8">My Profile</Text>
+    <View className="flex-1 bg-white">
+      <ScrollView className="flex-1 px-6 py-10">
+        <Text className="text-3xl font-bold mb-2">My Profile</Text>
 
         <View className="items-center mb-8">
           <View className="w-24 h-24 rounded-full bg-gray-200 items-center justify-center overflow-hidden mb-4">
@@ -51,12 +56,31 @@ export default function Profile() {
         </View>
 
         <View className="bg-gray-50 rounded-lg p-4 mb-4">
-          <TouchableOpacity className="py-4 border-b border-gray-200">
-            <Text className="text-base">⚙️ Settings</Text>
+          <TouchableOpacity 
+            onPress={handleNotifications}
+            className="py-4 border-b border-gray-200 flex-row items-center justify-between"
+          >
+            <View className="flex-row items-center">
+              <Ionicons name="notifications-outline" size={22} color="#333" />
+              <Text className="text-base ml-3">Notifications</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
 
-          <TouchableOpacity className="py-4">
-            <Text className="text-base">❓ Help & Support</Text>
+          <TouchableOpacity className="py-4 border-b border-gray-200 flex-row items-center justify-between">
+            <View className="flex-row items-center">
+              <Ionicons name="settings-outline" size={22} color="#333" />
+              <Text className="text-base ml-3">Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+
+          <TouchableOpacity className="py-4 flex-row items-center justify-between">
+            <View className="flex-row items-center">
+              <Ionicons name="help-circle-outline" size={22} color="#333" />
+              <Text className="text-base ml-3">Help & Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
         </View>
 

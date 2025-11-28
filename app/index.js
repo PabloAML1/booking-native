@@ -16,7 +16,7 @@ export default function Index() {
 
   // Redirigir según estado de auth
   if (isSignedIn) {
-    return <Redirect href="/(tabs)" />;
+    return <Redirect href="/(tabs)/rooms" />;
   }
 
   return <Redirect href="/(auth)/welcome" />;

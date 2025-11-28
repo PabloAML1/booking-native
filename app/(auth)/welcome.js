@@ -23,7 +23,7 @@ export default function Welcome() {
               Booking Native
             </Text>
             <Text className="text-white/80 text-lg text-center mt-4 px-8">
-              Find and book amazing hotels around the world
+              Find and book amazing rooms around the world
             </Text>
           </View>
 

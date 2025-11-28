@@ -36,19 +36,19 @@ export default function MyBookings() {
 
     try {
       const token = await getToken();
-      
+
       if (!token) {
         throw new Error("No token available");
       }
 
       await SecureStore.setItemAsync("clerkToken", token);
-      
+
       const { data } = await api.get("/api/bookings/user", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      
+
       if (data.success) {
         setBookings(data.bookings);
         console.log("✅ Bookings loaded:", data.bookings.length);
@@ -57,12 +57,12 @@ export default function MyBookings() {
       }
     } catch (error) {
       console.error("Error fetching bookings:", error);
-      
+
       if (error.response?.status === 401) {
         try {
           console.log("🔄 Token expired, refreshing...");
           const newToken = await getToken({ skipCache: true });
-          
+
           if (newToken) {
             await SecureStore.setItemAsync("clerkToken", newToken);
             const { data } = await api.get("/api/bookings/user", {
@@ -70,7 +70,7 @@ export default function MyBookings() {
                 Authorization: `Bearer ${newToken}`,
               },
             });
-            
+
             if (data.success) {
               setBookings(data.bookings);
               console.log("✅ Bookings loaded after token refresh");
@@ -96,19 +96,17 @@ export default function MyBookings() {
     }
   };
 
-  // 👇 Función mejorada para manejar el pago con Stripe
+  // Función mejorada para manejar el pago con Stripe
   const handlePayment = async (bookingId) => {
     try {
       setProcessingPayment(bookingId);
-      
-      // 👇 Obtener token fresco (sin caché)
+
       let token = await getToken({ skipCache: true });
-      
+
       if (!token) {
         throw new Error("No token available");
       }
 
-      // 👇 Guardar el token actualizado
       await SecureStore.setItemAsync("clerkToken", token);
 
       console.log("💳 Iniciando pago para booking:", bookingId);
@@ -122,19 +120,11 @@ export default function MyBookings() {
           },
         }
       );
-      
 
-      // 👇 Agregar logging detallado de la respuesta
-      console.log("📦 Respuesta completa del servidor:", JSON.stringify(data, null, 2));
-      console.log("✅ data.success:", data.success);
-      console.log("🔗 data.url:", data.url);
-      console.log("📝 data.message:", data.message);
-      
 
       if (data.success && data.url) {
         console.log("✅ URL de Stripe recibida, abriendo navegador...");
-        
-        // 👇 Abrir Stripe Checkout en el navegador
+
         const result = await WebBrowser.openBrowserAsync(data.url, {
           showTitle: true,
           toolbarColor: "#3b82f6",
@@ -142,9 +132,6 @@ export default function MyBookings() {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
         });
 
-        console.log("🌐 Browser result:", result.type);
-
-        // 👇 Recargar bookings después de cerrar el navegador
         if (result.type === "cancel" || result.type === "dismiss") {
           console.log("Usuario cerró el navegador, recargando bookings...");
           setTimeout(() => {
@@ -156,25 +143,27 @@ export default function MyBookings() {
           success: data.success,
           message: data.message,
           url: data.url,
-          fullData: data
+          fullData: data,
         });
-        Alert.alert("Error", data.message || "Failed to create payment session");
+        Alert.alert(
+          "Error",
+          data.message || "Failed to create payment session"
+        );
       }
     } catch (error) {
       console.error("❌ Payment error completo:", error);
       console.error("❌ Error response:", error.response?.data);
       console.error("❌ Error status:", error.response?.status);
       console.error("❌ Error message:", error.message);
-      
-      // 👇 Si el error es 401, intentar renovar token y reintentar
+
       if (error.response?.status === 401) {
         try {
           console.log("🔄 Token expired during payment, refreshing...");
           const newToken = await getToken({ skipCache: true });
-          
+
           if (newToken) {
             await SecureStore.setItemAsync("clerkToken", newToken);
-            
+
             // 👇 Reintentar el pago con el nuevo token
             const { data } = await api.post(
               "/api/bookings/stripe-payment",
@@ -186,16 +175,15 @@ export default function MyBookings() {
               }
             );
 
-            console.log("📦 Respuesta después de retry:", JSON.stringify(data, null, 2));
-
             if (data.success && data.url) {
               console.log("✅ Payment session created with new token");
-              
+
               const result = await WebBrowser.openBrowserAsync(data.url, {
                 showTitle: true,
                 toolbarColor: "#3b82f6",
                 controlsColor: "#ffffff",
-                presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                presentationStyle:
+                  WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
               });
 
               if (result.type === "cancel" || result.type === "dismiss") {
@@ -205,7 +193,10 @@ export default function MyBookings() {
               }
             } else {
               console.error("❌ Error en retry:", data);
-              Alert.alert("Error", data.message || "Failed to create payment session");
+              Alert.alert(
+                "Error",
+                data.message || "Failed to create payment session"
+              );
             }
           } else {
             Alert.alert("Session Expired", "Please sign in again");
@@ -216,15 +207,16 @@ export default function MyBookings() {
           console.error("❌ Retry error response:", retryError.response?.data);
           Alert.alert(
             "Payment Error",
-            retryError.response?.data?.message || "Session expired. Please try again after signing in."
+            retryError.response?.data?.message ||
+              "Session expired. Please try again after signing in."
           );
           router.push("/(auth)/sign-in");
         }
       } else {
-        // 👇 Mostrar el mensaje de error específico del backend
-        const errorMessage = error.response?.data?.message || 
-                            error.message || 
-                            "Failed to process payment";
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to process payment";
         console.error("❌ Mostrando error al usuario:", errorMessage);
         Alert.alert("Payment Error", errorMessage);
       }
@@ -250,26 +242,28 @@ export default function MyBookings() {
           onPress: async () => {
             try {
               const token = await getToken();
-              
+
               if (!token) {
                 throw new Error("No token available");
               }
-              
-              const { data } = await api.put(
+
+              const { data } = await api.delete(
                 `/api/bookings/cancel/${bookingId}`,
-                {},
                 {
                   headers: {
                     Authorization: `Bearer ${token}`,
                   },
                 }
               );
-              
+
               if (data.success) {
                 Alert.alert("Success", "Booking cancelled successfully");
                 fetchUserBookings();
               } else {
-                Alert.alert("Error", data.message || "Failed to cancel booking");
+                Alert.alert(
+                  "Error",
+                  data.message || "Failed to cancel booking"
+                );
               }
             } catch (error) {
               console.error("Cancel booking error:", error);
@@ -325,7 +319,7 @@ export default function MyBookings() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1 bg-white pb-16">
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
@@ -333,7 +327,7 @@ export default function MyBookings() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View className="px-6 py-6 pt-20">
+        <View className="px-6 ">
           <Text className="text-3xl font-bold mb-2">My Bookings</Text>
           <Text className="text-gray-500 mb-6">
             Easily manage your past, current, and upcoming hotel reservations
@@ -425,15 +419,13 @@ export default function MyBookings() {
                       </Text>
                     </View>
 
-                    {/* 👇 Botón Pay Now con loading state */}
+                    {/* PAY NOW BUTTON */}
                     {!booking.isPaid && (
                       <TouchableOpacity
                         onPress={() => handlePayment(booking._id)}
                         disabled={processingPayment === booking._id}
                         className={`px-4 py-2 border border-gray-400 rounded-full flex-row items-center ${
-                          processingPayment === booking._id
-                            ? "opacity-50"
-                            : ""
+                          processingPayment === booking._id ? "opacity-50" : ""
                         }`}
                       >
                         {processingPayment === booking._id ? (
@@ -446,6 +438,18 @@ export default function MyBookings() {
                         ) : (
                           <Text className="text-xs font-semibold">Pay Now</Text>
                         )}
+                      </TouchableOpacity>
+                    )}
+
+                    {/* 🔥 CANCEL SOLO SI NO ESTÁ PAGADO */}
+                    {!booking.isPaid && (
+                      <TouchableOpacity
+                        onPress={() => handleCancelBooking(booking._id)}
+                        className="px-4 py-2 border border-red-500 rounded-full ml-2"
+                      >
+                        <Text className="text-xs font-semibold text-red-500">
+                          Cancel
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>

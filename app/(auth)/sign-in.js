@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSignIn, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import BACKEND_URL from "../../api/index.js";
+import { BACKEND_URL } from "../../api/index.js";
 
 export default function SignIn() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -15,11 +15,69 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Función para traducir errores de Clerk a mensajes amigables
+  const getErrorMessage = (error) => {
+    // Si el error tiene un mensaje de Clerk
+    if (error.errors && error.errors.length > 0) {
+      const errorCode = error.errors[0].code;
+      const errorMessage = error.errors[0].message;
+
+      // Mapeo de errores comunes
+      if (errorMessage.includes("Password is incorrect")) {
+        return "Incorrect password. Please try again.";
+      }
+      if (errorMessage.includes("Identifier is incorrect")) {
+        return "This email is not registered. Please sign up first.";
+      }
+      if (errorMessage.includes("Too many requests")) {
+        return "Too many login attempts. Please wait a few minutes and try again.";
+      }
+      if (errorCode === "form_identifier_not_found") {
+        return "Account not found. Please check your email or sign up.";
+      }
+      if (errorCode === "form_password_incorrect") {
+        return "Incorrect password. Please try again.";
+      }
+      if (errorCode === "session_exists") {
+        return "You're already signed in.";
+      }
+
+      // Retornar el mensaje de Clerk si es claro
+      if (errorMessage && !errorMessage.includes("clerk") && !errorMessage.includes("Error")) {
+        return errorMessage;
+      }
+    }
+
+    // Mensajes genéricos según el tipo de error
+    if (error.message) {
+      if (error.message.includes("network")) {
+        return "Network error. Please check your connection.";
+      }
+      if (error.message.includes("timeout")) {
+        return "Request timed out. Please try again.";
+      }
+    }
+
+    return "Sign in failed. Please try again.";
+  };
+
   const onSignInPress = async () => {
     if (!isLoaded) return;
 
     if (!emailAddress || !password) {
-      Alert.alert("Error", "Please fill in all fields");
+      Alert.alert("Missing Information", "Please enter your email and password");
+      return;
+    }
+
+    // Validación básica de email
+    if (!emailAddress.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid email address");
+      return;
+    }
+
+    // Validación de contraseña
+    if (password.length < 8) {
+      Alert.alert("Invalid Password", "Password must be at least 8 characters long");
       return;
     }
 
@@ -36,7 +94,7 @@ export default function SignIn() {
       });
 
       if (completeSignIn.status !== "complete") {
-        Alert.alert("Error", "Sign in incomplete. Please try again.");
+        Alert.alert("Sign In Incomplete", "Please complete the sign in process and try again.");
         setLoading(false);
         return;
       }
@@ -48,21 +106,24 @@ export default function SignIn() {
       const token = await getToken();
 
       if (!token) {
-        Alert.alert("Error", "No token returned from Clerk");
+        Alert.alert("Authentication Error", "Could not authenticate. Please try again.");
         setLoading(false);
         return;
       }
 
       // Validar usuario en tu backend
       try {
-        const response = await fetch(`http://192.168.100.22:3000/api/user`, {
+        const response = await fetch(`${BACKEND_URL}/api/user`, {
           method: "GET",
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await response.json();
 
         if (!data.success) {
-          Alert.alert("Error", data.message || "User inactive");
+          Alert.alert(
+            "Account Inactive", 
+            data.message || "Your account is currently inactive. Please contact support."
+          );
           await signOut();
           setLoading(false);
           return;
@@ -72,15 +133,19 @@ export default function SignIn() {
         await SecureStore.setItemAsync("clerkToken", token);
 
         // Redirigir a tabs
-        router.replace("/(tabs)");
+        router.replace("/(tabs)/rooms");
       } catch (err) {
         console.error("Error validating user:", err);
-        Alert.alert("Error", "Failed to validate user");
+        Alert.alert(
+          "Validation Error", 
+          "Could not verify your account. Please check your connection and try again."
+        );
         await signOut();
       }
     } catch (err) {
       console.error("Sign in error:", err);
-      Alert.alert("Error", err.errors?.[0]?.message || "Sign in failed");
+      const friendlyMessage = getErrorMessage(err);
+      Alert.alert("Sign In Error", friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -106,6 +171,7 @@ export default function SignIn() {
               onChangeText={setEmailAddress}
               className="border border-gray-300 rounded-lg px-4 py-3"
               keyboardType="email-address"
+              autoComplete="email"
             />
           </View>
 
@@ -117,6 +183,7 @@ export default function SignIn() {
               secureTextEntry
               onChangeText={setPassword}
               className="border border-gray-300 rounded-lg px-4 py-3"
+              autoComplete="password"
             />
           </View>
 

@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSignUp, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import BACKEND_URL from "../../api/index.js";
+import { BACKEND_URL } from "../../api/index.js";
 
 export default function SignUp() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -18,23 +18,79 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const { getToken } = useAuth();
 
+  // Función para traducir errores a mensajes amigables
+  const getErrorMessage = (error) => {
+    if (error.errors && error.errors.length > 0) {
+      const errorCode = error.errors[0].code;
+      const errorMessage = error.errors[0].message;
+
+      // Mapeo de errores comunes
+      if (errorMessage.includes("email address is invalid")) {
+        return "Please enter a valid email address.";
+      }
+      if (errorMessage.includes("That email address is taken")) {
+        return "This email is already registered. Please sign in instead.";
+      }
+      if (errorMessage.includes("password is too common")) {
+        return "This password is too common. Please choose a stronger password.";
+      }
+      if (errorMessage.includes("Password is too short")) {
+        return "Password must be at least 8 characters long.";
+      }
+      if (errorCode === "form_param_format_invalid") {
+        return "Please check your information and try again.";
+      }
+      if (errorCode === "form_identifier_exists") {
+        return "This email is already registered. Please sign in.";
+      }
+
+      // Retornar el mensaje si es claro
+      if (errorMessage && !errorMessage.includes("clerk") && !errorMessage.includes("Error")) {
+        return errorMessage;
+      }
+    }
+
+    return "Sign up failed. Please try again.";
+  };
+
   const onSignUpPress = async () => {
     if (!isLoaded) return;
+
+    // Validaciones
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert("Missing Information", "Please enter your full name");
+      return;
+    }
+
+    if (!emailAddress.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid email address");
+      return;
+    }
+
+    if (password.length < 8) {
+      Alert.alert("Weak Password", "Password must be at least 8 characters long");
+      return;
+    }
 
     setLoading(true);
     try {
       await signUp.create({
         emailAddress,
         password,
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
       });
 
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPendingVerification(true);
+      Alert.alert(
+        "Verification Email Sent", 
+        `We sent a 6-digit code to ${emailAddress}. Please check your inbox.`
+      );
     } catch (err) {
       console.error("Sign up error:", err);
-      Alert.alert("Error", err.errors?.[0]?.message || "Sign up failed");
+      const friendlyMessage = getErrorMessage(err);
+      Alert.alert("Sign Up Error", friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -42,6 +98,11 @@ export default function SignUp() {
 
   const onPressVerify = async () => {
     if (!isLoaded) return;
+
+    if (code.length < 6) {
+      Alert.alert("Invalid Code", "Please enter the 6-digit verification code");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -56,18 +117,37 @@ export default function SignUp() {
         const token = await getToken();
 
         // Sincronizar usuario en backend
-        await fetch(`http://192.168.100.22:3000/api/user/sync`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        try {
+          await fetch(`${BACKEND_URL}/api/user/sync`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch (syncError) {
+          console.error("Sync error:", syncError);
+          // No mostramos error al usuario, el sync puede fallar pero la cuenta está creada
+        }
 
-        router.replace("/(auth)/sign-in");
+        Alert.alert(
+          "Success!", 
+          "Your account has been created successfully. Please sign in.",
+          [{ text: "OK", onPress: () => router.replace("/(auth)/sign-in") }]
+        );
       } else {
-        Alert.alert("Error", "Verification incomplete. Please try again.");
+        Alert.alert("Verification Incomplete", "Please check the code and try again.");
       }
     } catch (err) {
       console.error("Verification error:", err);
-      Alert.alert("Error", err.errors?.[0]?.message || "Verification failed");
+      
+      if (err.errors && err.errors[0]?.message.includes("incorrect")) {
+        Alert.alert("Incorrect Code", "The verification code is incorrect. Please try again.");
+      } else if (err.errors && err.errors[0]?.message.includes("expired")) {
+        Alert.alert(
+          "Code Expired", 
+          "The verification code has expired. Please go back and request a new one."
+        );
+      } else {
+        Alert.alert("Verification Failed", "Could not verify your email. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -96,6 +176,7 @@ export default function SignUp() {
                 placeholder="Enter your first name"
                 onChangeText={setFirstName}
                 className="border border-gray-300 rounded-lg px-4 py-3"
+                autoComplete="name-given"
               />
             </View>
 
@@ -106,6 +187,7 @@ export default function SignUp() {
                 placeholder="Enter your last name"
                 onChangeText={setLastName}
                 className="border border-gray-300 rounded-lg px-4 py-3"
+                autoComplete="name-family"
               />
             </View>
 
@@ -118,6 +200,7 @@ export default function SignUp() {
                 onChangeText={setEmailAddress}
                 className="border border-gray-300 rounded-lg px-4 py-3"
                 keyboardType="email-address"
+                autoComplete="email"
               />
             </View>
 
@@ -129,7 +212,11 @@ export default function SignUp() {
                 secureTextEntry
                 onChangeText={setPassword}
                 className="border border-gray-300 rounded-lg px-4 py-3"
+                autoComplete="password-new"
               />
+              <Text className="text-xs text-gray-500 mt-1">
+                Must be at least 8 characters long
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -160,13 +247,13 @@ export default function SignUp() {
                 Verification Code
               </Text>
               <Text className="text-xs text-gray-500 mb-2">
-                We sent a 6-digit code to {emailAddress}
+                We sent a 6-digit code to {emailAddress}. Check your inbox and spam folder.
               </Text>
               <TextInput
                 value={code}
                 placeholder="Enter verification code"
                 onChangeText={setCode}
-                className="border border-gray-300 rounded-lg px-4 py-3"
+                className="border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest"
                 keyboardType="number-pad"
                 maxLength={6}
               />
@@ -185,11 +272,14 @@ export default function SignUp() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setPendingVerification(false)}
+              onPress={() => {
+                setPendingVerification(false);
+                setCode("");
+              }}
               className="mt-2"
             >
               <Text className="text-center text-gray-600">
-                Wrong email? Go back
+                Wrong email? Go back and try again
               </Text>
             </TouchableOpacity>
           </View>

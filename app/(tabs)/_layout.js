@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
 import { Text, Platform, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Componente personalizado para los iconos de tabs
 const TabIcon = ({ focused, emoji, focusedEmoji }) => {
@@ -16,6 +16,8 @@ const TabIcon = ({ focused, emoji, focusedEmoji }) => {
 };
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['top']}>
       <Tabs
@@ -23,18 +25,19 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarStyle: {
             position: "absolute",
-            top: 0,
+            bottom: 0,
             left: 0,
             right: 0,
             backgroundColor: "white",
-            borderBottomWidth: 0,
-            height: Platform.OS === "ios" ? 85 : 75,
+            borderTopWidth: 1,
+            borderTopColor: "#e5e7eb",
+            height: (Platform.OS === "ios" ? 65 : 60) + insets.bottom,
             paddingTop: Platform.OS === "ios" ? 10 : 8,
-            paddingBottom: Platform.OS === "ios" ? 8 : 5,
-            paddingHorizontal: 16,
+            paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+            paddingHorizontal: 1,
             elevation: 8,
             shadowColor: "#3b82f6",
-            shadowOffset: { width: 0, height: 4 },
+            shadowOffset: { width: 0, height: -4 },
             shadowOpacity: 0.1,
             shadowRadius: 12,
           },
@@ -43,7 +46,7 @@ export default function TabsLayout() {
           tabBarLabelStyle: {
             fontSize: 11,
             fontWeight: "700",
-            marginTop: 4,
+            marginTop: 2,
             textTransform: "uppercase",
             letterSpacing: 0.5,
           },
@@ -55,19 +58,6 @@ export default function TabsLayout() {
           },
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ focused }) => (
-              <TabIcon 
-                focused={focused} 
-                emoji="🏘️" 
-                focusedEmoji="🏠"
-              />
-            ),
-          }}
-        />
         <Tabs.Screen
           name="rooms"
           options={{
@@ -105,6 +95,12 @@ export default function TabsLayout() {
                 focusedEmoji="👤"
               />
             ),
+          }}
+        />
+        <Tabs.Screen
+          name="index"
+          options={{
+            href: null,
           }}
         />
       </Tabs>
