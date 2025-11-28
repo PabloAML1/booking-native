@@ -2,7 +2,6 @@ import { Tabs } from "expo-router";
 import { Text, Platform, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Componente personalizado para los iconos de tabs
 const TabIcon = ({ focused, emoji, focusedEmoji }) => {
   return (
     <View className="items-center justify-center">

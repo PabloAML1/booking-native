@@ -96,7 +96,6 @@ export default function MyBookings() {
     }
   };
 
-  // Función mejorada para manejar el pago con Stripe
   const handlePayment = async (bookingId) => {
     try {
       setProcessingPayment(bookingId);
@@ -441,7 +440,7 @@ export default function MyBookings() {
                       </TouchableOpacity>
                     )}
 
-                    {/* 🔥 CANCEL SOLO SI NO ESTÁ PAGADO */}
+                    {/* CANCEL SOLO SI NO ESTÁ PAGADO */}
                     {!booking.isPaid && (
                       <TouchableOpacity
                         onPress={() => handleCancelBooking(booking._id)}

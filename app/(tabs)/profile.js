@@ -66,22 +66,6 @@ export default function Profile() {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
-
-          <TouchableOpacity className="py-4 border-b border-gray-200 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <Ionicons name="settings-outline" size={22} color="#333" />
-              <Text className="text-base ml-3">Settings</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity className="py-4 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <Ionicons name="help-circle-outline" size={22} color="#333" />
-              <Text className="text-base ml-3">Help & Support</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
         </View>
 
         <TouchableOpacity

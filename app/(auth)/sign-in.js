@@ -15,9 +15,7 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Función para traducir errores de Clerk a mensajes amigables
   const getErrorMessage = (error) => {
-    // Si el error tiene un mensaje de Clerk
     if (error.errors && error.errors.length > 0) {
       const errorCode = error.errors[0].code;
       const errorMessage = error.errors[0].message;
@@ -42,13 +40,11 @@ export default function SignIn() {
         return "You're already signed in.";
       }
 
-      // Retornar el mensaje de Clerk si es claro
       if (errorMessage && !errorMessage.includes("clerk") && !errorMessage.includes("Error")) {
         return errorMessage;
       }
     }
 
-    // Mensajes genéricos según el tipo de error
     if (error.message) {
       if (error.message.includes("network")) {
         return "Network error. Please check your connection.";
@@ -69,7 +65,6 @@ export default function SignIn() {
       return;
     }
 
-    // Validación básica de email
     if (!emailAddress.includes("@")) {
       Alert.alert("Invalid Email", "Please enter a valid email address");
       return;
@@ -84,10 +79,8 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      // Cerrar cualquier sesión existente
       await signOut();
 
-      // Crear sesión en Clerk
       const completeSignIn = await signIn.create({
         identifier: emailAddress,
         password,
@@ -99,10 +92,8 @@ export default function SignIn() {
         return;
       }
 
-      // Activar sesión
       await setActive({ session: completeSignIn.createdSessionId });
 
-      // Obtener token JWT de Clerk
       const token = await getToken();
 
       if (!token) {
@@ -111,7 +102,6 @@ export default function SignIn() {
         return;
       }
 
-      // Validar usuario en tu backend
       try {
         const response = await fetch(`${BACKEND_URL}/api/user`, {
           method: "GET",
@@ -129,13 +119,10 @@ export default function SignIn() {
           return;
         }
 
-        // Guardar token localmente
         await SecureStore.setItemAsync("clerkToken", token);
 
-        // Redirigir a tabs
         router.replace("/(tabs)/rooms");
       } catch (err) {
-        console.error("Error validating user:", err);
         Alert.alert(
           "Validation Error", 
           "Could not verify your account. Please check your connection and try again."
@@ -143,7 +130,6 @@ export default function SignIn() {
         await signOut();
       }
     } catch (err) {
-      console.error("Sign in error:", err);
       const friendlyMessage = getErrorMessage(err);
       Alert.alert("Sign In Error", friendlyMessage);
     } finally {

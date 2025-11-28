@@ -18,7 +18,6 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const { getToken } = useAuth();
 
-  // Función para traducir errores a mensajes amigables
   const getErrorMessage = (error) => {
     if (error.errors && error.errors.length > 0) {
       const errorCode = error.errors[0].code;
@@ -44,7 +43,6 @@ export default function SignUp() {
         return "This email is already registered. Please sign in.";
       }
 
-      // Retornar el mensaje si es claro
       if (errorMessage && !errorMessage.includes("clerk") && !errorMessage.includes("Error")) {
         return errorMessage;
       }
@@ -56,7 +54,6 @@ export default function SignUp() {
   const onSignUpPress = async () => {
     if (!isLoaded) return;
 
-    // Validaciones
     if (!firstName.trim() || !lastName.trim()) {
       Alert.alert("Missing Information", "Please enter your full name");
       return;
@@ -88,7 +85,6 @@ export default function SignUp() {
         `We sent a 6-digit code to ${emailAddress}. Please check your inbox.`
       );
     } catch (err) {
-      console.error("Sign up error:", err);
       const friendlyMessage = getErrorMessage(err);
       Alert.alert("Sign Up Error", friendlyMessage);
     } finally {
@@ -113,10 +109,8 @@ export default function SignUp() {
       if (completeSignUp.status === "complete") {
         await setActive({ session: completeSignUp.createdSessionId });
 
-        // Obtener token JWT
         const token = await getToken();
 
-        // Sincronizar usuario en backend
         try {
           await fetch(`${BACKEND_URL}/api/user/sync`, {
             method: "POST",
@@ -124,7 +118,6 @@ export default function SignUp() {
           });
         } catch (syncError) {
           console.error("Sync error:", syncError);
-          // No mostramos error al usuario, el sync puede fallar pero la cuenta está creada
         }
 
         Alert.alert(
@@ -136,7 +129,6 @@ export default function SignUp() {
         Alert.alert("Verification Incomplete", "Please check the code and try again.");
       }
     } catch (err) {
-      console.error("Verification error:", err);
       
       if (err.errors && err.errors[0]?.message.includes("incorrect")) {
         Alert.alert("Incorrect Code", "The verification code is incorrect. Please try again.");

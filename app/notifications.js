@@ -13,7 +13,6 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
 
-  // Función para obtener las reservas del usuario
   const fetchBookings = async () => {
     try {
       const token = await getToken();

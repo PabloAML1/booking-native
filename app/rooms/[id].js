@@ -11,11 +11,12 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppContext } from "../../context/AppContext";
-import { useUser, useAuth } from "@clerk/clerk-expo"; // 👈 Agregar useAuth
+import { useUser, useAuth } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "../../api/index.js";
-import * as SecureStore from "expo-secure-store"; // 👈 Agregar SecureStore
+import * as SecureStore from "expo-secure-store";
+import usePushNotifications from "../../hooks/usePushNotifications";
 
 const facilityIcons = {
   WiFi: "wifi",
@@ -43,11 +44,12 @@ const facilityIcons = {
 };
 
 export default function RoomDetails() {
+  const pushToken = usePushNotifications();
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { rooms } = useAppContext();
   const { user, isSignedIn } = useUser();
-  const { getToken } = useAuth(); // 👈 Obtener getToken
+  const { getToken } = useAuth();
 
   const [room, setRoom] = useState(null);
   const [mainImage, setMainImage] = useState(null);
@@ -142,10 +144,7 @@ export default function RoomDetails() {
         Alert.alert("Error", data.message || "Failed to check availability");
       }
     } catch (err) {
-      console.error("Check availability error:", err);
-      console.error("Error response:", err.response?.data);
 
-      // 👇 Manejar error 401
       if (err.response?.status === 401) {
         Alert.alert("Session Expired", "Please sign in again");
         router.push("/(auth)/sign-in");
@@ -229,10 +228,7 @@ export default function RoomDetails() {
         Alert.alert("Error", data.message || "Failed to create booking");
       }
     } catch (err) {
-      console.error("Booking error:", err);
-      console.error("Error response:", err.response?.data);
 
-      // 👇 Manejar error 401
       if (err.response?.status === 401) {
         Alert.alert("Session Expired", "Please sign in again");
         router.push("/(auth)/sign-in");
