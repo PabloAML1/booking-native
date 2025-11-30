@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Modal, ScrollView } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, TextInput, Platform, Modal, ScrollView, Alert } from "react-native";
 import { useAppContext } from "../../context/AppContext";
 import HotelCard from "../../components/HotelCard";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
+import api from "../../api/index.js";
 
 export default function Rooms() {
   const { rooms } = useAppContext();
@@ -14,16 +15,16 @@ export default function Rooms() {
   const [selectedSort, setSelectedSort] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Estados para las fechas
   const [checkInDate, setCheckInDate] = useState(null);
   const [checkOutDate, setCheckOutDate] = useState(null);
   const [showCheckInPicker, setShowCheckInPicker] = useState(false);
   const [showCheckOutPicker, setShowCheckOutPicker] = useState(false);
   
-  // Estado para mostrar/ocultar el modal de filtros
+  const [availableRoomIds, setAvailableRoomIds] = useState([]);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  
   const [showFiltersModal, setShowFiltersModal] = useState(false);
   
-  // Estados para controlar qué secciones están abiertas
   const [expandedSections, setExpandedSections] = useState({
     roomType: false,
     priceRange: false,
@@ -35,14 +36,12 @@ export default function Rooms() {
   const priceRanges = ["0-100", "100-200", "200-300", "300+"];
   const sortOptions = ["Price Low to High", "Price High to Low"];
 
-  // Contar filtros activos
   const activeFiltersCount = 
     selectedFilters.roomType.length + 
     selectedFilters.priceRange.length + 
     (selectedSort ? 1 : 0) + 
     (checkInDate && checkOutDate ? 1 : 0);
 
-  // Toggle sección desplegable
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -66,27 +65,84 @@ export default function Rooms() {
     setSelectedSort(selectedSort === sortOption ? "" : sortOption);
   };
 
-  // Manejadores de fechas
+  // 🔥 Función para verificar disponibilidad de todas las habitaciones
+  const checkRoomsAvailability = async (startDate, endDate) => {
+    if (!startDate || !endDate) {
+      setAvailableRoomIds([]);
+      return;
+    }
+
+    setCheckingAvailability(true);
+
+    try {
+      // Verificar disponibilidad de cada habitación
+      const availabilityChecks = rooms.map(async (room) => {
+        try {
+          const { data } = await api.post("/api/bookings/check-availability", {
+            room: room._id,
+            dateRange: [
+              {
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+              },
+            ],
+          });
+
+          return {
+            roomId: room._id,
+            isAvailable: data.success && data.isAvailable,
+          };
+        } catch (error) {
+          console.error(`Error checking availability for room ${room._id}:`, error);
+          return {
+            roomId: room._id,
+            isAvailable: false,
+          };
+        }
+      });
+
+      const results = await Promise.all(availabilityChecks);
+
+      // Filtrar solo habitaciones disponibles
+      const available = results
+        .filter((result) => result.isAvailable)
+        .map((result) => result.roomId);
+
+      setAvailableRoomIds(available);
+
+    } catch (error) {
+      console.error("Error checking availability:", error);
+      Alert.alert("Error", "Failed to check room availability");
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
+
   const onCheckInChange = (event, selectedDate) => {
     setShowCheckInPicker(Platform.OS === 'ios');
     if (selectedDate) {
       setCheckInDate(selectedDate);
       if (checkOutDate && selectedDate >= checkOutDate) {
         setCheckOutDate(null);
+        setAvailableRoomIds([]);
+      } else if (checkOutDate) {
+        checkRoomsAvailability(selectedDate, checkOutDate);
       }
     }
   };
 
   const onCheckOutChange = (event, selectedDate) => {
     setShowCheckOutPicker(Platform.OS === 'ios');
-    if (selectedDate) {
+    if (selectedDate && checkInDate) {
       setCheckOutDate(selectedDate);
+      checkRoomsAvailability(checkInDate, selectedDate);
     }
   };
 
   const clearDates = () => {
     setCheckInDate(null);
     setCheckOutDate(null);
+    setAvailableRoomIds([]);
   };
 
   const formatDate = (date) => {
@@ -136,21 +192,8 @@ export default function Rooms() {
   const matchesDateRange = useCallback((room) => {
     if (!checkInDate || !checkOutDate) return true;
     
-    if (room.bookings && room.bookings.length > 0) {
-      return !room.bookings.some(booking => {
-        const bookingCheckIn = new Date(booking.checkIn);
-        const bookingCheckOut = new Date(booking.checkOut);
-        
-        return (
-          (checkInDate >= bookingCheckIn && checkInDate < bookingCheckOut) ||
-          (checkOutDate > bookingCheckIn && checkOutDate <= bookingCheckOut) ||
-          (checkInDate <= bookingCheckIn && checkOutDate >= bookingCheckOut)
-        );
-      });
-    }
-    
-    return true;
-  }, [checkInDate, checkOutDate]);
+    return availableRoomIds.includes(room._id);
+  }, [checkInDate, checkOutDate, availableRoomIds]);
 
   const sortRooms = useCallback((a, b) => {
     if (selectedSort === "Price Low to High") {
@@ -272,6 +315,26 @@ export default function Rooms() {
           )}
         </View>
 
+        {/* Indicador de verificación de disponibilidad */}
+        {checkingAvailability && (
+          <View className="mb-3 flex-row items-center bg-blue-50 rounded-lg px-4 py-3">
+            <Ionicons name="sync" size={18} color="#3b82f6" />
+            <Text className="text-blue-600 text-sm ml-2 font-medium">
+              Checking availability...
+            </Text>
+          </View>
+        )}
+
+        {/* Mensaje cuando hay fechas seleccionadas */}
+        {checkInDate && checkOutDate && !checkingAvailability && (
+          <View className="mb-3 flex-row items-center bg-green-50 rounded-lg px-4 py-3">
+            <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+            <Text className="text-green-700 text-sm ml-2 font-medium">
+              Showing {availableRoomIds.length} available room(s) for selected dates
+            </Text>
+          </View>
+        )}
+
         <Text className="text-sm text-gray-500 mb-2">
           {filteredRooms.length} room(s) found
         </Text>
@@ -329,6 +392,24 @@ export default function Rooms() {
                       </Text>
                     </View>
                   </TouchableOpacity>
+
+                  {/* Indicador de disponibilidad en el modal */}
+                  {checkingAvailability && (
+                    <View className="mb-3 flex-row items-center justify-center bg-blue-50 rounded-lg px-4 py-3">
+                      <Ionicons name="sync" size={18} color="#3b82f6" />
+                      <Text className="text-blue-600 text-sm ml-2">
+                        Checking availability...
+                      </Text>
+                    </View>
+                  )}
+
+                  {checkInDate && checkOutDate && !checkingAvailability && (
+                    <View className="mb-3 bg-green-50 rounded-lg px-4 py-3">
+                      <Text className="text-green-700 text-sm text-center font-medium">
+                        ✓ {availableRoomIds.length} room(s) available
+                      </Text>
+                    </View>
+                  )}
 
                   {(checkInDate || checkOutDate) && (
                     <TouchableOpacity

@@ -5,7 +5,6 @@ import { View, ActivityIndicator } from "react-native";
 export default function Index() {
   const { isSignedIn, isLoaded } = useAuth();
 
-  // Mostrar loading mientras carga
   if (!isLoaded) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -14,7 +13,6 @@ export default function Index() {
     );
   }
 
-  // Redirigir según estado de auth
   if (isSignedIn) {
     return <Redirect href="/(tabs)/rooms" />;
   }

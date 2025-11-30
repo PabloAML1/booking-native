@@ -23,7 +23,6 @@ export default function SignUp() {
       const errorCode = error.errors[0].code;
       const errorMessage = error.errors[0].message;
 
-      // Mapeo de errores comunes
       if (errorMessage.includes("email address is invalid")) {
         return "Please enter a valid email address.";
       }

@@ -8,7 +8,6 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUser, useAuth } from "@clerk/clerk-expo";
@@ -27,6 +26,7 @@ export default function MyBookings() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(null);
+  const [cancellingBooking, setCancellingBooking] = useState(null);
 
   const fetchUserBookings = async () => {
     if (!isSignedIn) {
@@ -51,7 +51,6 @@ export default function MyBookings() {
 
       if (data.success) {
         setBookings(data.bookings);
-        console.log("✅ Bookings loaded:", data.bookings.length);
       } else {
         Alert.alert("Error", data.message || "Failed to load bookings");
       }
@@ -60,7 +59,6 @@ export default function MyBookings() {
 
       if (error.response?.status === 401) {
         try {
-          console.log("🔄 Token expired, refreshing...");
           const newToken = await getToken({ skipCache: true });
 
           if (newToken) {
@@ -73,7 +71,6 @@ export default function MyBookings() {
 
             if (data.success) {
               setBookings(data.bookings);
-              console.log("✅ Bookings loaded after token refresh");
             }
           } else {
             Alert.alert("Session Expired", "Please sign in again");
@@ -108,8 +105,6 @@ export default function MyBookings() {
 
       await SecureStore.setItemAsync("clerkToken", token);
 
-      console.log("💳 Iniciando pago para booking:", bookingId);
-
       const { data } = await api.post(
         "/api/bookings/stripe-payment",
         { bookingId },
@@ -120,9 +115,7 @@ export default function MyBookings() {
         }
       );
 
-
       if (data.success && data.url) {
-        console.log("✅ URL de Stripe recibida, abriendo navegador...");
 
         const result = await WebBrowser.openBrowserAsync(data.url, {
           showTitle: true,
@@ -132,13 +125,12 @@ export default function MyBookings() {
         });
 
         if (result.type === "cancel" || result.type === "dismiss") {
-          console.log("Usuario cerró el navegador, recargando bookings...");
           setTimeout(() => {
             fetchUserBookings();
           }, 2000);
         }
       } else {
-        console.error("❌ Error en respuesta:", {
+        console.error("Error en respuesta:", {
           success: data.success,
           message: data.message,
           url: data.url,
@@ -150,20 +142,18 @@ export default function MyBookings() {
         );
       }
     } catch (error) {
-      console.error("❌ Payment error completo:", error);
-      console.error("❌ Error response:", error.response?.data);
-      console.error("❌ Error status:", error.response?.status);
-      console.error("❌ Error message:", error.message);
+      console.error("Payment error completo:", error);
+      console.error("Error response:", error.response?.data);
+      console.error("Error status:", error.response?.status);
+      console.error("Error message:", error.message);
 
       if (error.response?.status === 401) {
         try {
-          console.log("🔄 Token expired during payment, refreshing...");
           const newToken = await getToken({ skipCache: true });
 
           if (newToken) {
             await SecureStore.setItemAsync("clerkToken", newToken);
 
-            // 👇 Reintentar el pago con el nuevo token
             const { data } = await api.post(
               "/api/bookings/stripe-payment",
               { bookingId },
@@ -175,7 +165,6 @@ export default function MyBookings() {
             );
 
             if (data.success && data.url) {
-              console.log("✅ Payment session created with new token");
 
               const result = await WebBrowser.openBrowserAsync(data.url, {
                 showTitle: true,
@@ -191,7 +180,7 @@ export default function MyBookings() {
                 }, 2000);
               }
             } else {
-              console.error("❌ Error en retry:", data);
+              console.error("Error en retry:", data);
               Alert.alert(
                 "Error",
                 data.message || "Failed to create payment session"
@@ -202,8 +191,8 @@ export default function MyBookings() {
             router.push("/(auth)/sign-in");
           }
         } catch (retryError) {
-          console.error("❌ Failed to retry payment:", retryError);
-          console.error("❌ Retry error response:", retryError.response?.data);
+          console.error("Failed to retry payment:", retryError);
+          console.error("Retry error response:", retryError.response?.data);
           Alert.alert(
             "Payment Error",
             retryError.response?.data?.message ||
@@ -216,7 +205,7 @@ export default function MyBookings() {
           error.response?.data?.message ||
           error.message ||
           "Failed to process payment";
-        console.error("❌ Mostrando error al usuario:", errorMessage);
+        console.error("Mostrando error al usuario:", errorMessage);
         Alert.alert("Payment Error", errorMessage);
       }
     } finally {
@@ -240,6 +229,8 @@ export default function MyBookings() {
           style: "destructive",
           onPress: async () => {
             try {
+              setCancellingBooking(bookingId);
+
               const token = await getToken();
 
               if (!token) {
@@ -270,6 +261,8 @@ export default function MyBookings() {
                 "Error",
                 error.response?.data?.message || "Failed to cancel booking"
               );
+            } finally {
+              setCancellingBooking(null);
             }
           },
         },
@@ -422,9 +415,9 @@ export default function MyBookings() {
                     {!booking.isPaid && (
                       <TouchableOpacity
                         onPress={() => handlePayment(booking._id)}
-                        disabled={processingPayment === booking._id}
+                        disabled={processingPayment === booking._id || cancellingBooking === booking._id}
                         className={`px-4 py-2 border border-gray-400 rounded-full flex-row items-center ${
-                          processingPayment === booking._id ? "opacity-50" : ""
+                          processingPayment === booking._id || cancellingBooking === booking._id ? "opacity-50" : ""
                         }`}
                       >
                         {processingPayment === booking._id ? (
@@ -440,15 +433,27 @@ export default function MyBookings() {
                       </TouchableOpacity>
                     )}
 
-                    {/* CANCEL SOLO SI NO ESTÁ PAGADO */}
+                    {/* 🔥 CANCEL BUTTON CON INDICADOR */}
                     {!booking.isPaid && (
                       <TouchableOpacity
                         onPress={() => handleCancelBooking(booking._id)}
-                        className="px-4 py-2 border border-red-500 rounded-full ml-2"
+                        disabled={cancellingBooking === booking._id || processingPayment === booking._id}
+                        className={`px-4 py-2 border border-red-500 rounded-full ml-2 flex-row items-center ${
+                          cancellingBooking === booking._id || processingPayment === booking._id ? "opacity-50" : ""
+                        }`}
                       >
-                        <Text className="text-xs font-semibold text-red-500">
-                          Cancel
-                        </Text>
+                        {cancellingBooking === booking._id ? (
+                          <>
+                            <ActivityIndicator size="small" color="#ef4444" />
+                            <Text className="text-xs font-semibold text-red-500 ml-2">
+                              Cancelling...
+                            </Text>
+                          </>
+                        ) : (
+                          <Text className="text-xs font-semibold text-red-500">
+                            Cancel
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     )}
                   </View>

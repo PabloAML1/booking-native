@@ -20,7 +20,6 @@ export default function SignIn() {
       const errorCode = error.errors[0].code;
       const errorMessage = error.errors[0].message;
 
-      // Mapeo de errores comunes
       if (errorMessage.includes("Password is incorrect")) {
         return "Incorrect password. Please try again.";
       }
@@ -70,7 +69,6 @@ export default function SignIn() {
       return;
     }
 
-    // Validación de contraseña
     if (password.length < 8) {
       Alert.alert("Invalid Password", "Password must be at least 8 characters long");
       return;

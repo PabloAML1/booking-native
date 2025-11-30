@@ -1,6 +1,4 @@
 import { ScrollView, View } from "react-native";
-import Hero from "../../components/Hero";
-import FeaturedDestination from "../../components/FeaturedDestination";
 
 export default function Home() {
   return (
@@ -10,8 +8,6 @@ export default function Home() {
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        <Hero />
-        <FeaturedDestination />
       </ScrollView>
     </View>
   );

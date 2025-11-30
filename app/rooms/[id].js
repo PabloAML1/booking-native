@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "../../api/index.js";
 import * as SecureStore from "expo-secure-store";
-import usePushNotifications from "../../hooks/usePushNotifications";
+import { sendLocalNotification, scheduleNotification } from "../../hooks/usePushNotifications";
 
 const facilityIcons = {
   WiFi: "wifi",
@@ -44,7 +44,6 @@ const facilityIcons = {
 };
 
 export default function RoomDetails() {
-  const pushToken = usePushNotifications();
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { rooms } = useAppContext();
@@ -79,7 +78,6 @@ export default function RoomDetails() {
   const nights = calculateNights();
   const totalPrice = room ? room.pricePerNight * nights * guests : 0;
 
-  // 👇 Verificar disponibilidad con token
   const checkAvailability = async () => {
     if (!isSignedIn) {
       Alert.alert("Sign In Required", "Please sign in to check availability");
@@ -94,21 +92,13 @@ export default function RoomDetails() {
 
     setLoading(true);
     try {
-      // 👇 Obtener token fresco
       const token = await getToken({ skipCache: true });
       
       if (!token) {
         throw new Error("No token available");
       }
 
-      // 👇 Guardar token
       await SecureStore.setItemAsync("clerkToken", token);
-
-      console.log("Checking availability for:", {
-        room: id,
-        checkIn: checkInDate.toISOString(),
-        checkOut: checkOutDate.toISOString(),
-      });
 
       const { data } = await api.post(
         "/api/bookings/check-availability",
@@ -124,12 +114,10 @@ export default function RoomDetails() {
         },
         {
           headers: {
-            Authorization: `Bearer ${token}`, // 👈 Enviar token explícitamente
+            Authorization: `Bearer ${token}`,
           },
         }
       );
-
-      console.log("Availability response:", data);
 
       if (data.success) {
         setIsAvailable(data.isAvailable);
@@ -144,7 +132,6 @@ export default function RoomDetails() {
         Alert.alert("Error", data.message || "Failed to check availability");
       }
     } catch (err) {
-
       if (err.response?.status === 401) {
         Alert.alert("Session Expired", "Please sign in again");
         router.push("/(auth)/sign-in");
@@ -162,7 +149,6 @@ export default function RoomDetails() {
     }
   };
 
-  // 👇 Crear reserva con token
   const handleBooking = async () => {
     if (!isSignedIn) {
       Alert.alert("Sign In Required", "Please sign in to book a room", [
@@ -179,22 +165,13 @@ export default function RoomDetails() {
 
     setLoading(true);
     try {
-      // 👇 Obtener token fresco
       const token = await getToken({ skipCache: true });
       
       if (!token) {
         throw new Error("No token available");
       }
 
-      // 👇 Guardar token
       await SecureStore.setItemAsync("clerkToken", token);
-
-      console.log("Creating booking for:", {
-        room: id,
-        checkIn: checkInDate.toISOString(),
-        checkOut: checkOutDate.toISOString(),
-        guests,
-      });
 
       const { data } = await api.post(
         "/api/bookings/book",
@@ -212,23 +189,65 @@ export default function RoomDetails() {
         },
         {
           headers: {
-            Authorization: `Bearer ${token}`, // 👈 Enviar token explícitamente
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      console.log("Booking response:", data);
-
       if (data.success) {
-        Alert.alert("Success!", "Booking created successfully", [
-          { text: "OK", onPress: () => router.push("/(tabs)/my-bookings") },
-        ]);
+        await sendLocalNotification(
+          "🎉 Booking Confirmed!",
+          `Your reservation at ${room.hotel.name} has been confirmed. Check-in: ${checkInDate.toLocaleDateString()}`,
+          {
+            bookingId: data.booking._id,
+            hotelName: room.hotel.name,
+            checkIn: checkInDate.toISOString(),
+          }
+        );
+
+        const oneDayBefore = new Date(checkInDate);
+        oneDayBefore.setDate(oneDayBefore.getDate() - 1);
+        oneDayBefore.setHours(10, 0, 0, 0); // 10:00 AM
+
+        if (oneDayBefore > new Date()) {
+          await scheduleNotification(
+            "📅 Check-in Tomorrow!",
+            `Your reservation at ${room.hotel.name} is tomorrow. Don't forget to prepare!`,
+            oneDayBefore,
+            {
+              bookingId: data.booking._id,
+              hotelName: room.hotel.name,
+            }
+          );
+        }
+
+        const checkInMorning = new Date(checkInDate);
+        checkInMorning.setHours(8, 0, 0, 0); // 8:00 AM
+
+        if (checkInMorning > new Date()) {
+          await scheduleNotification(
+            "🏨 Check-in Today!",
+            `Today is your check-in day at ${room.hotel.name}. Have a great stay!`,
+            checkInMorning,
+            {
+              bookingId: data.booking._id,
+              hotelName: room.hotel.name,
+            }
+          );
+        }
+
+        Alert.alert(
+          "Success!", 
+          "Booking created successfully! You will receive notifications about your reservation.",
+          [
+            { text: "OK", onPress: () => router.push("/(tabs)/my-bookings") },
+          ]
+        );
         setIsAvailable(false);
       } else {
         Alert.alert("Error", data.message || "Failed to create booking");
       }
     } catch (err) {
-
       if (err.response?.status === 401) {
         Alert.alert("Session Expired", "Please sign in again");
         router.push("/(auth)/sign-in");

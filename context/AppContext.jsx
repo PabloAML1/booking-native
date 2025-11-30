@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { Alert } from "react-native";
 import api from "../api";
 
 const AppContext = createContext();
@@ -17,7 +16,6 @@ export const AppProvider = ({ children }) => {
     // Extraer el array de habitaciones
     setRooms(response.data.rooms);
 
-    console.log("✅ Rooms cargados:", response.data.rooms.length);
 
   } catch (error) {
     console.error("❌ Error fetching rooms:", error.message);

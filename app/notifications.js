@@ -12,8 +12,15 @@ export default function Notifications() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
-  const fetchBookings = async () => {
+  useEffect(() => {
+      fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
     try {
       const token = await getToken();
 
@@ -30,57 +37,35 @@ export default function Notifications() {
       });
 
       if (data.success && data.bookings) {
-        const bookingNotifications = data.bookings.map((booking) => ({
+        const notificationsData = data.bookings.map((booking) => ({
           id: booking._id,
-          type: getNotificationType(booking.isPaid),
-          title: getNotificationTitle(booking.isPaid),
-          message: getNotificationMessage(booking),
+          type: booking.isPaid ? "payment" : "booking",
+          title: booking.isPaid ? "Payment Confirmed" : "Booking Pending",
+          message: `${booking.hotel.name} - ${booking.room.roomType}. Total: $${booking.totalPrice}. Check-in: ${new Date(booking.checkInDate).toLocaleDateString()}`,
           time: getTimeAgo(booking.createdAt),
           date: new Date(booking.createdAt),
           booking: booking,
+          isRead: false,
+          isPaid: booking.isPaid,
         }));
 
-        bookingNotifications.sort((a, b) => b.date - a.date);
-
-        setNotifications(bookingNotifications);
-        console.log("✅ Notifications loaded:", bookingNotifications.length);
-      } else {
-        console.error("❌ Invalid response format:", data);
-        setNotifications([]);
+        notificationsData.sort((a, b) => b.date - a.date);
+        setNotifications(notificationsData);
+        setCurrentPage(1);
+        console.log("✅ User notifications loaded:", notificationsData.length);
       }
 
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching bookings:", error);
+      console.error("Error fetching notifications:", error);
 
       if (error.response?.status === 401) {
         try {
-          console.log("🔄 Token expired, refreshing...");
           const newToken = await getToken({ skipCache: true });
 
           if (newToken) {
             await SecureStore.setItemAsync("clerkToken", newToken);
-            const { data } = await api.get("/api/bookings/user", {
-              headers: {
-                Authorization: `Bearer ${newToken}`,
-              },
-            });
-
-            if (data.success && data.bookings) {
-              const bookingNotifications = data.bookings.map((booking) => ({
-                id: booking._id,
-                type: getNotificationType(booking.isPaid),
-                title: getNotificationTitle(booking.isPaid),
-                message: getNotificationMessage(booking),
-                time: getTimeAgo(booking.createdAt),
-                date: new Date(booking.createdAt),
-                booking: booking,
-              }));
-
-              bookingNotifications.sort((a, b) => b.date - a.date);
-              setNotifications(bookingNotifications);
-              console.log("✅ Notifications loaded after token refresh");
-            }
+            await fetchNotifications();
           } else {
             Alert.alert("Session Expired", "Please sign in again");
             router.push("/(auth)/sign-in");
@@ -98,41 +83,10 @@ export default function Notifications() {
     }
   };
 
-  const getNotificationType = (isPaid) => {
-    return isPaid ? "booking" : "payment";
-  };
-
-  const getNotificationTitle = (isPaid) => {
-    return isPaid ? "Payment Successful" : "Payment Pending";
-  };
-
-  const getNotificationMessage = (booking) => {
-    const checkIn = new Date(booking.checkInDate).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const checkOut = new Date(booking.checkOutDate).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-
-    let message = "";
-    
-    if (booking.isPaid) {
-      message = `Thank you for your payment! Your reservation from ${checkIn} to ${checkOut} is confirmed. Total paid: $${booking.totalPrice}`;
-    } else {
-      message = `Payment required for your booking from ${checkIn} to ${checkOut}. Total: $${booking.totalPrice}. Payment method: ${booking.paymentMethod}`;
-    }
-
-    return message;
-  };
-
   const getTimeAgo = (date) => {
     const now = new Date();
-    const bookingDate = new Date(date);
-    const diffMs = now - bookingDate;
+    const notifDate = new Date(date);
+    const diffMs = now - notifDate;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
@@ -149,25 +103,17 @@ export default function Notifications() {
     }
   };
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchBookings();
-  };
-
-  const deleteNotification = (id) => {
-    setNotifications(notifications.filter((notif) => notif.id !== id));
+    await fetchNotifications();
   };
 
   const getIconName = (type) => {
     switch (type) {
       case "booking":
-        return "checkmark-circle";
+        return "calendar";
       case "payment":
-        return "card";
+        return "checkmark-circle";
       default:
         return "notifications";
     }
@@ -176,12 +122,49 @@ export default function Notifications() {
   const getIconColor = (type) => {
     switch (type) {
       case "booking":
-        return { bg: "bg-green-100", color: "#22c55e" };
+        return { bg: "bg-blue-100", color: "#3b82f6" };
       case "payment":
-        return { bg: "bg-orange-100", color: "#f97316" };
+        return { bg: "bg-green-100", color: "#22c55e" };
       default:
         return { bg: "bg-gray-100", color: "#6b7280" };
     }
+  };
+
+  const getStatusBadge = (notification) => {
+    if (notification.isPaid) {
+      return (
+        <View className="px-2 py-1 rounded-full bg-green-100">
+          <Text className="text-xs font-semibold text-green-700">PAID</Text>
+        </View>
+      );
+    }
+    
+    return (
+      <View className="px-2 py-1 rounded-full bg-red-100">
+        <Text className="text-xs font-semibold text-red-700">UNPAID</Text>
+      </View>
+    );
+  };
+
+  const totalPages = Math.ceil(notifications.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentNotifications = notifications.slice(startIndex, endIndex);
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (page) => {
+    setCurrentPage(page);
   };
 
   if (loading) {
@@ -195,17 +178,15 @@ export default function Notifications() {
 
   return (
     <View className="flex-1 bg-white py-16">
-      {/* Header */}
       <View className="px-6 py-4 border-b border-gray-200 bg-white">
         <View className="flex-row items-center">
           <TouchableOpacity onPress={() => router.back()} className="mr-4">
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text className="text-2xl font-bold">Notifications</Text>
+          <Text className="text-2xl font-bold">My Notifications</Text>
         </View>
       </View>
 
-      {/* Lista de notificaciones */}
       <ScrollView
         className="flex-1"
         refreshControl={
@@ -213,62 +194,138 @@ export default function Notifications() {
         }
       >
         {notifications.length > 0 ? (
-          notifications.map((notification) => {
-            const iconStyle = getIconColor(notification.type);
-            return (
-              <View
-                key={notification.id}
-                className="px-6 py-4 border-b border-gray-100 bg-white"
-              >
-                <View className="flex-row items-start">
-                  {/* Icono */}
-                  <View className={`w-12 h-12 rounded-full items-center justify-center ${iconStyle.bg}`}>
-                    <Ionicons
-                      name={getIconName(notification.type)}
-                      size={24}
-                      color={iconStyle.color}
-                    />
-                  </View>
+          <>
+            {/* Lista de notificaciones paginadas */}
+            {currentNotifications.map((notification) => {
+              const iconStyle = getIconColor(notification.type);
+              return (
+                <View
+                  key={notification.id}
+                  className={`px-6 py-4 border-b border-gray-100 ${
+                    notification.isRead ? "bg-white" : "bg-blue-50"
+                  }`}
+                >
+                  <View className="flex-row items-start">
+                    <View className={`w-12 h-12 rounded-full items-center justify-center ${iconStyle.bg}`}>
+                      <Ionicons
+                        name={getIconName(notification.type)}
+                        size={24}
+                        color={iconStyle.color}
+                      />
+                    </View>
 
-                  {/* Contenido */}
-                  <View className="flex-1 ml-4">
-                    <Text className="font-semibold text-base text-gray-900 mb-1">
-                      {notification.title}
-                    </Text>
-                    <Text className="text-gray-600 text-sm mb-2 pr-4">
-                      {notification.message}
-                    </Text>
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-gray-400 text-xs">
-                        {notification.time}
+                    <View className="flex-1 ml-4">
+                      <Text className="font-semibold text-base text-gray-900 mb-1">
+                        {notification.title}
                       </Text>
-                      <View className={`px-2 py-1 rounded-full ${
-                        notification.booking.isPaid
-                          ? "bg-green-100"
-                          : "bg-red-100"
-                      }`}>
-                        <Text className={`text-xs font-semibold ${
-                          notification.booking.isPaid
-                            ? "text-green-700"
-                            : "text-red-700"
-                        }`}>
-                          {notification.booking.isPaid ? "PAID" : "UNPAID"}
+                      <Text className="text-gray-600 text-sm mb-2 pr-4">
+                        {notification.message}
+                      </Text>
+                      
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-gray-400 text-xs">
+                          {notification.time}
                         </Text>
+                        {getStatusBadge(notification)}
                       </View>
                     </View>
                   </View>
+                </View>
+              );
+            })}
 
-                  {/* Botón de eliminar */}
+            {/* Controles de Paginación */}
+            {totalPages > 1 && (
+              <View className="px-6 py-6 bg-white border-t border-gray-200">
+                <View className="flex-row items-center justify-between mb-3">
+                  <Text className="text-sm text-gray-600">
+                    Showing {startIndex + 1}-{Math.min(endIndex, notifications.length)} of {notifications.length}
+                  </Text>
+                  <Text className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </Text>
+                </View>
+
+                <View className="flex-row items-center justify-center gap-2">
                   <TouchableOpacity
-                    onPress={() => deleteNotification(notification.id)}
-                    className="ml-2 p-2"
+                    onPress={goToPreviousPage}
+                    disabled={currentPage === 1}
+                    className={`px-4 py-2 rounded-lg ${
+                      currentPage === 1 ? "bg-gray-200" : "bg-blue-500"
+                    }`}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    <View className="flex-row items-center">
+                      <Ionicons 
+                        name="chevron-back" 
+                        size={16} 
+                        color={currentPage === 1 ? "#999" : "white"} 
+                      />
+                      <Text className={`ml-1 font-semibold ${
+                        currentPage === 1 ? "text-gray-400" : "text-white"
+                      }`}>
+                        Previous
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View className="flex-row gap-2">
+                    {[...Array(totalPages)].map((_, index) => {
+                      const page = index + 1;
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <TouchableOpacity
+                            key={page}
+                            onPress={() => goToPage(page)}
+                            className={`w-10 h-10 rounded-lg items-center justify-center ${
+                              currentPage === page ? "bg-blue-500" : "bg-gray-200"
+                            }`}
+                          >
+                            <Text className={`font-semibold ${
+                              currentPage === page ? "text-white" : "text-gray-700"
+                            }`}>
+                              {page}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      } else if (page === currentPage - 2 || page === currentPage + 2) {
+                        return (
+                          <View key={page} className="w-10 h-10 items-center justify-center">
+                            <Text className="text-gray-400">...</Text>
+                          </View>
+                        );
+                      }
+                      return null;
+                    })}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={goToNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`px-4 py-2 rounded-lg ${
+                      currentPage === totalPages ? "bg-gray-200" : "bg-blue-500"
+                    }`}
+                  >
+                    <View className="flex-row items-center">
+                      <Text className={`mr-1 font-semibold ${
+                        currentPage === totalPages ? "text-gray-400" : "text-white"
+                      }`}>
+                        Next
+                      </Text>
+                      <Ionicons 
+                        name="chevron-forward" 
+                        size={16} 
+                        color={currentPage === totalPages ? "#999" : "white"} 
+                      />
+                    </View>
                   </TouchableOpacity>
                 </View>
               </View>
-            );
-          })
+            )}
+          </>
         ) : (
           <View className="flex-1 items-center justify-center py-20">
             <View className="w-32 h-32 rounded-full bg-gray-100 items-center justify-center mb-4">

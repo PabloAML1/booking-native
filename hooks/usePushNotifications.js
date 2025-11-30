@@ -1,19 +1,23 @@
 import * as Notifications from "expo-notifications";
-import { useEffect, useState } from "react";
-import * as Device from 'expo-device';
+import { Platform } from "react-native";
 
-export default function usePushNotifications() {
-  const [expoPushToken, setExpoPushToken] = useState("");
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
-  useEffect(() => {
-    registerForPushNotificationsAsync().then(token => setExpoPushToken(token));
-  }, []);
-
-  return expoPushToken;
-}
-
-async function registerForPushNotificationsAsync() {
-  if (!Device.isDevice) return null;
+export async function requestNotificationPermissions() {
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -24,10 +28,57 @@ async function registerForPushNotificationsAsync() {
   }
 
   if (finalStatus !== "granted") {
-    alert("Permission required for notifications!");
-    return null;
+    return false;
   }
+  return true;
+}
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
-  return token;
+export async function sendLocalNotification(title, body, data = {}) {
+  try {
+    // Solicitar permisos antes de enviar
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: title,
+        body: body,
+        data: data,
+        sound: true,
+        priority: Platform.OS === 'android' 
+          ? Notifications.AndroidNotificationPriority.HIGH 
+          : undefined,
+      },
+      trigger: null,
+    });
+  } catch (error) {
+    console.error("Error enviando notificación:", error);
+  }
+}
+
+// 🔥 Función para programar notificación futura
+export async function scheduleNotification(title, body, triggerDate, data = {}) {
+  try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return;
+
+    const trigger = triggerDate instanceof Date 
+      ? triggerDate 
+      : new Date(triggerDate);
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: title,
+        body: body,
+        data: data,
+        sound: true,
+        priority: Platform.OS === 'android' 
+          ? Notifications.AndroidNotificationPriority.HIGH 
+          : undefined,
+      },
+      trigger: trigger,
+    });
+  } catch (error) {
+    console.error("❌ Error programando notificación:", error);
+  }
 }

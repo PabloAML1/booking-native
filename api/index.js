@@ -1,11 +1,11 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
-export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://10.79.29.200:3000";
+export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://192.168.100.22:3000";
 
 const api = axios.create({
   baseURL: BACKEND_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -19,7 +19,6 @@ api.interceptors.request.use(
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log("✅ Token enviado:", token.substring(0, 20) + "..."); // Solo primeros 20 caracteres
       } else {
         console.log("⚠️ No hay token disponible");
       }

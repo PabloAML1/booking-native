@@ -1,13 +1,15 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, Image, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from "react-native";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import useUserRole from "../../hooks/useUserRole";
 
 export default function Profile() {
   const { user } = useUser();
   const { signOut } = useAuth();
   const router = useRouter();
+  const { isHotelOwner, loading: roleLoading } = useUserRole();
 
   const handleSignOut = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -32,6 +34,18 @@ export default function Profile() {
     router.push("/notifications");
   };
 
+  const handleDashboard = () => {
+    router.push("/dashboard");
+  };
+
+  if (roleLoading) {
+    return (
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color="#3b82f6" />
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-white">
       <ScrollView className="flex-1 px-6 py-10">
@@ -53,12 +67,35 @@ export default function Profile() {
           <Text className="text-gray-500 mt-1">
             {user?.primaryEmailAddress?.emailAddress}
           </Text>
+          
+          {isHotelOwner && (
+            <View className="mt-2 px-4 py-1 rounded-full bg-purple-100">
+              <Text className="text-xs font-semibold text-purple-700">
+                HOTEL OWNER
+              </Text>
+            </View>
+          )}
         </View>
 
         <View className="bg-gray-50 rounded-lg p-4 mb-4">
+          {isHotelOwner && (
+            <TouchableOpacity 
+              onPress={handleDashboard}
+              className="py-4 border-b border-gray-200 flex-row items-center justify-between"
+            >
+              <View className="flex-row items-center">
+                <Ionicons name="stats-chart" size={22} color="#a855f7" />
+                <Text className="text-base ml-3 font-semibold">Dashboard</Text>
+              </View>
+              <View className="flex-row items-center">
+                <Ionicons name="chevron-forward" size={20} color="#999" />
+              </View>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity 
             onPress={handleNotifications}
-            className="py-4 border-b border-gray-200 flex-row items-center justify-between"
+            className="py-4 flex-row items-center justify-between"
           >
             <View className="flex-row items-center">
               <Ionicons name="notifications-outline" size={22} color="#333" />
