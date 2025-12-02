@@ -4,10 +4,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSignUp, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { BACKEND_URL } from "../../api/index.js";
+import { useOAuth } from "@clerk/clerk-expo";
+import * as SecureStore from 'expo-secure-store';
 
 export default function SignUp() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
+  const { getToken } = useAuth();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +20,6 @@ export default function SignUp() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const { getToken } = useAuth();
 
   const getErrorMessage = (error) => {
     if (error.errors && error.errors.length > 0) {
@@ -144,6 +147,81 @@ export default function SignUp() {
     }
   };
 
+  const onGoogleSignUp = async () => {
+    if (!isLoaded) return;
+
+    setLoading(true);
+    let isNewUser = false;
+
+    try {
+      const result = await startOAuthFlow();
+      const { createdSessionId, setActive: oAuthSetActive } = result;
+
+      // ⭐ DETECTAR SI ES USUARIO NUEVO
+      isNewUser = result.createdUserId !== undefined && result.createdUserId !== null;
+
+      if (createdSessionId) {
+        await oAuthSetActive({ session: createdSessionId });
+
+        const token = await getToken();
+
+        if (!token) {
+          Alert.alert("Authentication Error", "Could not authenticate. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        await SecureStore.setItemAsync("clerkToken", token);
+
+        try {
+          await fetch(`${BACKEND_URL}/api/user/sync`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          // ⭐ MENSAJE CONDICIONAL
+          if (isNewUser) {
+            Alert.alert(
+              "Success!",
+              "Your account has been created successfully.",
+              [{ 
+                text: "OK", 
+                onPress: () => {
+                  setTimeout(() => {
+                    router.replace("/(tabs)/rooms");
+                  }, 50);
+                }
+              }]
+            );
+          } else {
+            Alert.alert(
+              "Welcome Back!",
+              "You're already registered. Welcome back!",
+              [{ 
+                text: "OK", 
+                onPress: () => {
+                  setTimeout(() => {
+                    router.replace("/(tabs)/rooms");
+                  }, 50);
+                }
+              }]
+            );
+          }
+        } catch (syncError) {
+          console.error("Sync error:", syncError);
+          setTimeout(() => {
+            router.replace("/(tabs)/rooms");
+          }, 50);
+        }
+      }
+    } catch (err) {
+      console.error("Google OAuth error:", err);
+      Alert.alert("Sign Up Error", "Could not sign up with Google. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-1 px-6 py-6">
@@ -160,6 +238,26 @@ export default function SignUp() {
 
         {!pendingVerification ? (
           <View className="gap-4 mt-8">
+            {/* Google Sign Up Button */}
+            <TouchableOpacity
+              onPress={onGoogleSignUp}
+              disabled={loading}
+              className={`border border-gray-300 py-4 rounded-lg items-center flex-row justify-center ${
+                loading ? "opacity-50" : ""
+              }`}
+            >
+              <Text className="text-gray-700 font-semibold text-base mr-2">
+                Continue with Google
+              </Text>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View className="flex-row items-center my-4">
+              <View className="flex-1 h-px bg-gray-300" />
+              <Text className="mx-4 text-gray-500">OR</Text>
+              <View className="flex-1 h-px bg-gray-300" />
+            </View>
+
             <View>
               <Text className="text-sm text-gray-700 mb-2">First Name</Text>
               <TextInput

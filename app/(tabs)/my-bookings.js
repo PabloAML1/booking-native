@@ -28,6 +28,27 @@ export default function MyBookings() {
   const [processingPayment, setProcessingPayment] = useState(null);
   const [cancellingBooking, setCancellingBooking] = useState(null);
 
+  // ⭐ FUNCIÓN HELPER PARA OBTENER TOKEN FRESCO
+  const getFreshToken = async () => {
+    try {
+      const token = await getToken({ skipCache: true });
+
+      if (!token) {
+        Alert.alert("Session Expired", "Please sign in again");
+        router.push("/(auth)/sign-in");
+        return null;
+      }
+
+      await SecureStore.setItemAsync("clerkToken", token);
+      return token;
+    } catch (error) {
+      console.error("Failed to get fresh token:", error);
+      Alert.alert("Session Expired", "Please sign in again");
+      router.push("/(auth)/sign-in");
+      return null;
+    }
+  };
+
   const fetchUserBookings = async () => {
     if (!isSignedIn) {
       setLoading(false);
@@ -35,13 +56,11 @@ export default function MyBookings() {
     }
 
     try {
-      const token = await getToken();
+      const token = await getFreshToken();
 
       if (!token) {
-        throw new Error("No token available");
+        return;
       }
-
-      await SecureStore.setItemAsync("clerkToken", token);
 
       const { data } = await api.get("/api/bookings/user", {
         headers: {
@@ -58,29 +77,8 @@ export default function MyBookings() {
       console.error("Error fetching bookings:", error);
 
       if (error.response?.status === 401) {
-        try {
-          const newToken = await getToken({ skipCache: true });
-
-          if (newToken) {
-            await SecureStore.setItemAsync("clerkToken", newToken);
-            const { data } = await api.get("/api/bookings/user", {
-              headers: {
-                Authorization: `Bearer ${newToken}`,
-              },
-            });
-
-            if (data.success) {
-              setBookings(data.bookings);
-            }
-          } else {
-            Alert.alert("Session Expired", "Please sign in again");
-            router.push("/(auth)/sign-in");
-          }
-        } catch (refreshError) {
-          console.error("Failed to refresh token:", refreshError);
-          Alert.alert("Session Expired", "Please sign in again");
-          router.push("/(auth)/sign-in");
-        }
+        Alert.alert("Session Expired", "Please sign in again");
+        router.push("/(auth)/sign-in");
       } else {
         Alert.alert(
           "Error",
@@ -97,13 +95,12 @@ export default function MyBookings() {
     try {
       setProcessingPayment(bookingId);
 
-      let token = await getToken({ skipCache: true });
+      // ⭐ OBTENER TOKEN FRESCO
+      const token = await getFreshToken();
 
       if (!token) {
-        throw new Error("No token available");
+        return;
       }
-
-      await SecureStore.setItemAsync("clerkToken", token);
 
       const { data } = await api.post(
         "/api/bookings/stripe-payment",
@@ -116,7 +113,6 @@ export default function MyBookings() {
       );
 
       if (data.success && data.url) {
-
         const result = await WebBrowser.openBrowserAsync(data.url, {
           showTitle: true,
           toolbarColor: "#3b82f6",
@@ -148,58 +144,16 @@ export default function MyBookings() {
       console.error("Error message:", error.message);
 
       if (error.response?.status === 401) {
-        try {
-          const newToken = await getToken({ skipCache: true });
-
-          if (newToken) {
-            await SecureStore.setItemAsync("clerkToken", newToken);
-
-            const { data } = await api.post(
-              "/api/bookings/stripe-payment",
-              { bookingId },
-              {
-                headers: {
-                  Authorization: `Bearer ${newToken}`,
-                },
-              }
-            );
-
-            if (data.success && data.url) {
-
-              const result = await WebBrowser.openBrowserAsync(data.url, {
-                showTitle: true,
-                toolbarColor: "#3b82f6",
-                controlsColor: "#ffffff",
-                presentationStyle:
-                  WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-              });
-
-              if (result.type === "cancel" || result.type === "dismiss") {
-                setTimeout(() => {
-                  fetchUserBookings();
-                }, 2000);
-              }
-            } else {
-              console.error("Error en retry:", data);
-              Alert.alert(
-                "Error",
-                data.message || "Failed to create payment session"
-              );
-            }
-          } else {
-            Alert.alert("Session Expired", "Please sign in again");
-            router.push("/(auth)/sign-in");
-          }
-        } catch (retryError) {
-          console.error("Failed to retry payment:", retryError);
-          console.error("Retry error response:", retryError.response?.data);
-          Alert.alert(
-            "Payment Error",
-            retryError.response?.data?.message ||
-              "Session expired. Please try again after signing in."
-          );
-          router.push("/(auth)/sign-in");
-        }
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please try again.",
+          [
+            {
+              text: "OK",
+              onPress: () => fetchUserBookings(),
+            },
+          ]
+        );
       } else {
         const errorMessage =
           error.response?.data?.message ||
@@ -231,10 +185,11 @@ export default function MyBookings() {
             try {
               setCancellingBooking(bookingId);
 
-              const token = await getToken();
+              // ⭐ OBTENER TOKEN FRESCO ANTES DE CANCELAR
+              const token = await getFreshToken();
 
               if (!token) {
-                throw new Error("No token available");
+                return;
               }
 
               const { data } = await api.delete(
@@ -257,10 +212,25 @@ export default function MyBookings() {
               }
             } catch (error) {
               console.error("Cancel booking error:", error);
-              Alert.alert(
-                "Error",
-                error.response?.data?.message || "Failed to cancel booking"
-              );
+
+              // ⭐ MANEJO MEJORADO DE ERROR 401
+              if (error.response?.status === 401) {
+                Alert.alert(
+                  "Session Expired",
+                  "Your session has expired. Please refresh the page and try again.",
+                  [
+                    {
+                      text: "Refresh",
+                      onPress: () => fetchUserBookings(),
+                    },
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  "Error",
+                  error.response?.data?.message || "Failed to cancel booking"
+                );
+              }
             } finally {
               setCancellingBooking(null);
             }
@@ -276,7 +246,6 @@ export default function MyBookings() {
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
   if (!isSignedIn) {
@@ -332,10 +301,10 @@ export default function MyBookings() {
                 You don't have any bookings yet
               </Text>
               <TouchableOpacity
-                onPress={() => router.push("/(tabs)")}
+                onPress={() => router.push("/(tabs)/rooms")}
                 className="bg-blue-600 px-6 py-3 rounded-lg mt-6"
               >
-                <Text className="text-white font-semibold">Browse Hotels</Text>
+                <Text className="text-white font-semibold">Browse Rooms</Text>
               </TouchableOpacity>
             </View>
           ) : (

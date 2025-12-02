@@ -1,4 +1,5 @@
 import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
 import { Platform } from "react-native";
 
 Notifications.setNotificationHandler({
@@ -9,76 +10,72 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export async function requestNotificationPermissions() {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
+export const registerForPushNotificationsAsync = async () => {
+  let token;
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
+      lightColor: "#FF231F7C",
     });
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
 
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+      alert("Failed to get push token for push notification!");
+      return;
+    }
+
+    token = (await Notifications.getExpoPushTokenAsync()).data;
+  } else {
+    alert("Must use physical device for Push Notifications");
   }
 
-  if (finalStatus !== "granted") {
-    return false;
-  }
-  return true;
-}
+  return token;
+};
 
-export async function sendLocalNotification(title, body, data = {}) {
-  try {
-    // Solicitar permisos antes de enviar
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) return;
+export const sendLocalNotification = async (title, body, data = {}) => {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      data,
+      sound: true,
+    },
+    trigger: null, // null = inmediata
+  });
+};
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: title,
-        body: body,
-        data: data,
-        sound: true,
-        priority: Platform.OS === 'android' 
-          ? Notifications.AndroidNotificationPriority.HIGH 
-          : undefined,
-      },
-      trigger: null,
-    });
-  } catch (error) {
-    console.error("Error enviando notificación:", error);
-  }
-}
+export const scheduleNotification = async (title, body, date, data = {}) => {
+  // ⭐ FORMATO CORRECTO: usar objeto con type y date
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      data,
+      sound: true,
+    },
+    trigger: {
+      type: "date",
+      date: date, // debe ser un objeto Date
+    },
+  });
+};
 
-// 🔥 Función para programar notificación futura
-export async function scheduleNotification(title, body, triggerDate, data = {}) {
-  try {
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) return;
+export const cancelAllScheduledNotifications = async () => {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+};
 
-    const trigger = triggerDate instanceof Date 
-      ? triggerDate 
-      : new Date(triggerDate);
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: title,
-        body: body,
-        data: data,
-        sound: true,
-        priority: Platform.OS === 'android' 
-          ? Notifications.AndroidNotificationPriority.HIGH 
-          : undefined,
-      },
-      trigger: trigger,
-    });
-  } catch (error) {
-    console.error("❌ Error programando notificación:", error);
-  }
-}
+export const cancelNotification = async (notificationId) => {
+  await Notifications.cancelScheduledNotificationAsync(notificationId);
+};

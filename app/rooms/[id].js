@@ -122,7 +122,7 @@ export default function RoomDetails() {
       if (data.success) {
         setIsAvailable(data.isAvailable);
         Alert.alert(
-          data.isAvailable ? "✅ Available!" : "❌ Not Available",
+          data.isAvailable ? "Available!" : "Not Available",
           data.message ||
             (data.isAvailable
               ? "Room is available for booking"

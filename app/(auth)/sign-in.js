@@ -5,11 +5,13 @@ import { useSignIn, useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { BACKEND_URL } from "../../api/index.js";
+import { useOAuth } from "@clerk/clerk-expo";
 
 export default function SignIn() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const { signOut, getToken } = useAuth();
   const router = useRouter();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -135,6 +137,68 @@ export default function SignIn() {
     }
   };
 
+  const onGoogleSignIn = async () => {
+    if (!isLoaded) return;
+
+    setLoading(true);
+    try {
+      const { createdSessionId, setActive: oAuthSetActive } = await startOAuthFlow();
+
+      if (createdSessionId) {
+        await oAuthSetActive({ session: createdSessionId });
+
+        const token = await getToken();
+
+        if (!token) {
+          Alert.alert("Authentication Error", "Could not authenticate. Please try again.");
+          setLoading(false);
+          return;
+        }
+        
+        await SecureStore.setItemAsync("clerkToken", token);
+
+        try {
+          // Sync user with backend
+          await fetch(`${BACKEND_URL}/api/user/sync`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          // Validate user is active
+          const response = await fetch(`${BACKEND_URL}/api/user`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json();
+
+          if (!data.success) {
+            Alert.alert(
+              "Account Inactive",
+              data.message || "Your account is currently inactive. Please contact support."
+            );
+            await signOut();
+            setLoading(false);
+            return;
+          }
+
+          await SecureStore.setItemAsync("clerkToken", token);
+          router.replace("/(tabs)/rooms");
+        } catch (err) {
+          Alert.alert(
+            "Validation Error",
+            "Could not verify your account. Please check your connection and try again."
+          );
+          await signOut();
+        }
+      }
+    } catch (err) {
+      console.error("Google OAuth error:", err);
+      Alert.alert("Sign In Error", "Could not sign in with Google. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-white">
       <View className="flex-1 px-6 py-6">
@@ -146,6 +210,26 @@ export default function SignIn() {
         <Text className="text-gray-500 mt-2">Sign in to continue</Text>
 
         <View className="gap-4 mt-8">
+          {/* Google Sign In Button */}
+          <TouchableOpacity
+            onPress={onGoogleSignIn}
+            disabled={loading}
+            className={`border border-gray-300 py-4 rounded-lg items-center flex-row justify-center ${
+              loading ? "opacity-50" : ""
+            }`}
+          >
+            <Text className="text-gray-700 font-semibold text-base mr-2">
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View className="flex-row items-center my-4">
+            <View className="flex-1 h-px bg-gray-300" />
+            <Text className="mx-4 text-gray-500">OR</Text>
+            <View className="flex-1 h-px bg-gray-300" />
+          </View>
+
           <View>
             <Text className="text-sm text-gray-700 mb-2">Email</Text>
             <TextInput
